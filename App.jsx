@@ -1,3 +1,5 @@
+import { db } from "./firebase";
+import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import { useState, useEffect, useMemo } from "react";
 
 // Time zones:
@@ -193,7 +195,7 @@ function fmtDate(d) {
 }
 
 export default function FIFA2026() {
-  const [winners, setWinners]     = useState(()=>{ try{return JSON.parse(localStorage.getItem("fwc26_w")||"{}")}catch{return{}} });
+  const [winners, setWinners] = useState({});
   const [customTeams, setCustomTeams] = useState(()=>{ try{return JSON.parse(localStorage.getItem("fwc26_ct")||"{}")}catch{return{}} });
   const [stageFilter, setStage]   = useState("All");
   const [search, setSearch]       = useState("");
@@ -202,7 +204,16 @@ export default function FIFA2026() {
   const [dropHome, setDropHome]   = useState("");
   const [dropAway, setDropAway]   = useState("");
 
-  useEffect(()=>{ try{localStorage.setItem("fwc26_w",JSON.stringify(winners))}catch{} },[winners]);
+  useEffect(() => {
+  const unsub = onSnapshot(doc(db, "worldcup", "results"), (snapshot) => {
+    if (snapshot.exists()) {
+      setWinners(snapshot.data());
+    }
+  });
+
+  return () => unsub();
+}, []);
+
   useEffect(()=>{ try{localStorage.setItem("fwc26_ct",JSON.stringify(customTeams))}catch{} },[customTeams]);
 
   const played = Object.keys(winners).length;
@@ -243,10 +254,18 @@ export default function FIFA2026() {
     setEditing(null);
   }
 
-  function setWinner(matchId, val) {
-    setWinners(prev=>({...prev,[matchId]:val}));
-    setEditing(null);
-  }
+  async function setWinner(matchId, val) {
+  const updated = {
+    ...winners,
+    [matchId]: val
+  };
+
+  setWinners(updated);
+
+  await setDoc(doc(db, "worldcup", "results"), updated);
+
+  setEditing(null);
+}
 
   function clearMatch(matchId) {
     setWinners(prev=>{ const n={...prev}; delete n[matchId]; return n; });
